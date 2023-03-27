@@ -1,5 +1,6 @@
 import type { ChatRequest, ChatReponse } from "./api/chat/typing";
-import { filterConfig, Message, ModelConfig } from "./store";
+import { filterConfig, Message, ModelConfig, useAccessStore } from "./store";
+import Locale from "./locales";
 
 const TIME_OUT_MS = 30000;
 
@@ -26,6 +27,21 @@ const makeRequestParam = (
   };
 };
 
+function getHeaders() {
+  const accessStore = useAccessStore.getState();
+  let headers: Record<string, string> = {};
+
+  if (accessStore.enabledAccessControl()) {
+    headers["access-code"] = accessStore.accessCode;
+  }
+
+  if (accessStore.token && accessStore.token.length > 0) {
+    headers["token"] = accessStore.token;
+  }
+
+  return headers;
+}
+
 export async function requestChat(messages: Message[]) {
   const req: ChatRequest = makeRequestParam(messages, { filterBot: true });
 
@@ -33,6 +49,7 @@ export async function requestChat(messages: Message[]) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...getHeaders(),
     },
     body: JSON.stringify(req),
   });
@@ -47,6 +64,7 @@ export async function requestChatStream(
     modelConfig?: ModelConfig;
     onMessage: (message: string, done: boolean) => void;
     onError: (error: Error) => void;
+    onController?: (controller: AbortController) => void;
   }
 ) {
   const req = makeRequestParam(messages, {
@@ -69,6 +87,7 @@ export async function requestChatStream(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...getHeaders(),
       },
       body: JSON.stringify(req),
       signal: controller.signal,
@@ -85,6 +104,8 @@ export async function requestChatStream(
     if (res.ok) {
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
+
+      options?.onController?.(controller);
 
       while (true) {
         // handle time out, will stop if no response in 10 secs
@@ -103,13 +124,17 @@ export async function requestChatStream(
       }
 
       finish();
+    } else if (res.status === 401) {
+      console.error("Anauthorized");
+      responseText = Locale.Error.Unauthorized;
+      finish();
     } else {
       console.error("Stream Error");
       options?.onError(new Error("Stream Error"));
     }
   } catch (err) {
-    console.error("NetWork Error");
-    options?.onError(new Error("NetWork Error"));
+    console.error("NetWork Error", err);
+    options?.onError(err as Error);
   }
 }
 
@@ -126,3 +151,34 @@ export async function requestWithPrompt(messages: Message[], prompt: string) {
 
   return res.choices.at(0)?.message?.content ?? "";
 }
+
+// To store message streaming controller
+export const ControllerPool = {
+  controllers: {} as Record<string, AbortController>,
+
+  addController(
+    sessionIndex: number,
+    messageIndex: number,
+    controller: AbortController
+  ) {
+    const key = this.key(sessionIndex, messageIndex);
+    this.controllers[key] = controller;
+    return key;
+  },
+
+  stop(sessionIndex: number, messageIndex: number) {
+    const key = this.key(sessionIndex, messageIndex);
+    const controller = this.controllers[key];
+    console.log(controller);
+    controller?.abort();
+  },
+
+  remove(sessionIndex: number, messageIndex: number) {
+    const key = this.key(sessionIndex, messageIndex);
+    delete this.controllers[key];
+  },
+
+  key(sessionIndex: number, messageIndex: number) {
+    return `${sessionIndex},${messageIndex}`;
+  },
+};

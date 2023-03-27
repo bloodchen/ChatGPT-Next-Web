@@ -2,6 +2,10 @@ import type { LocaleType } from "./index";
 
 const en: LocaleType = {
   WIP: "WIP...",
+  Error: {
+    Unauthorized:
+      "Unauthorized access, please enter access code in settings page.",
+  },
   ChatItem: {
     ChatItemCount: (count: number) => `${count} messages`,
   },
@@ -13,6 +17,7 @@ const en: LocaleType = {
       Export: "Export All Messages as Markdown",
       Copy: "Copy",
       Stop: "Stop",
+      Retry: "Retry",
     },
     Typing: "Typing…",
     Input: (submitKey: string) =>
@@ -68,6 +73,16 @@ const en: LocaleType = {
       Title: "History Compression Threshold",
       SubTitle:
         "Will compress if uncompressed messages length exceeds the value",
+    },
+    Token: {
+      Title: "API Key",
+      SubTitle: "Use your key to ignore access code limit",
+      Placeholder: "OpenAI API Key",
+    },
+    AccessCode: {
+      Title: "Access Code",
+      SubTitle: "Access control enabled",
+      Placeholder: "Need Access Code",
     },
     Model: "Model",
     Temperature: {
